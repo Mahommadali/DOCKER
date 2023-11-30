@@ -31,3 +31,7 @@ pipeline:
             spec: {}
             type: Cloud
         type: CI
+  flowControl:
+    barriers:
+      - name: dc
+        identifier: dc
