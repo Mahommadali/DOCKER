@@ -26,10 +26,10 @@ pipeline:
                   timeout: ""
                   type: Run
           platform:
-            os: Linux
+            os: Windows
             arch: Amd64
           runtime:
-            type: Cloud
+            type: Docker
             spec: {}
         type: CI
   flowControl:
