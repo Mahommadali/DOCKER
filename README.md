@@ -16,6 +16,8 @@ A safe home for all your data. Access & share your files, calendars, contacts, m
 
 ![logo](https://cdn.rawgit.com/nextcloud/docker/80dd587d847b184ba95d7187a2a7a56ae4cbbb7b/logo.svg)
 
+This Docker micro-service image is developed and maintained by the Nextcloud community. Nextcloud GmbH does not offer support for this Docker image. When you are looking to get professional support, you can become an [enterprise](https://nextcloud.com/enterprise/) customer or use [Nextcloud All-in-One docker image](https://github.com/nextcloud/all-in-one#nextcloud-all-in-one) - as the name suggests, Nextcloud All-in-One provides easy deployment and maintenance of Nextcloud Hub included in this one Nextcloud instance.
+
 # How to use this image
 This image is designed to be used in a micro-service environment. There are two versions of the image you can choose from.
 
@@ -36,7 +38,7 @@ Now you can access Nextcloud at http://localhost:8080/ from your host system.
 
 
 ## Using the fpm image
-To use the fpm image, you need an additional web server that can proxy http-request to the fpm-port of the container. For fpm connection this container exposes port 9000. In most cases, you might want use another container or your host as proxy. If you use your host you can address your Nextcloud container directly on port 9000. If you use another container, make sure that you add them to the same docker network (via `docker run --network <NAME> ...` or a `docker-compose` file). In both cases you don't want to map the fpm port to your host.
+To use the fpm image, you need an additional web server, such as [nginx](https://docs.nextcloud.com/server/latest/admin_manual/installation/nginx.html), that can proxy http-request to the fpm-port of the container. For fpm connection this container exposes port 9000. In most cases, you might want to use another container or your host as proxy. If you use your host you can address your Nextcloud container directly on port 9000. If you use another container, make sure that you add them to the same docker network (via `docker run --network <NAME> ...` or a `docker-compose` file). In both cases you don't want to map the fpm port to your host.
 
 ```console
 $ docker run -d nextcloud:fpm
@@ -66,7 +68,7 @@ Database:
 ```console
 $ docker run -d \
 -v db:/var/lib/mysql \
-mariadb
+mariadb:10.6
 ```
 
 If you want to get fine grained access to your individual files, you can mount additional volumes for data, config, your theme and custom apps. The `data`, `config` files are stored in respective subfolders inside `/var/www/html/`. The apps are split into core `apps` (which are shipped with Nextcloud and you don't need to take care of) and a `custom_apps` folder. If you use a custom theme it would go into the `themes` subfolder.
@@ -89,6 +91,10 @@ $ docker run -d \
 -v theme:/var/www/html/themes/<YOUR_CUSTOM_THEME> \
 nextcloud
 ```
+If mounting additional volumes, you should note that data inside the main folder (`/var/www/html`) may be removed during installation and upgrades, unless listed in [upgrade.exclude](https://github.com/nextcloud/docker/blob/master/upgrade.exclude). You should consider:
+- Confirming that [upgrade.exclude](https://github.com/nextcloud/docker/blob/master/upgrade.exclude) contains the files and folders that should persist during installation and upgrades; or 
+- Mounting storage volumes to locations outside of `/var/www/html`.
+
 
 ## Using the Nextcloud command-line interface
 To use the [Nextcloud command-line interface](https://docs.nextcloud.com/server/latest/admin_manual/configuration_server/occ_command.html) (aka. `occ` command):
@@ -101,7 +107,7 @@ $ docker-compose exec --user www-data app php occ
 ```
 
 ## Auto configuration via environment variables
-The Nextcloud image supports auto configuration via environment variables. You can preconfigure everything that is asked on the install page on first run. To enable auto configuration, set your database connection via the following environment variables. ONLY use one database type!
+The Nextcloud image supports auto configuration via environment variables. You can preconfigure everything that is asked on the install page on first run. To enable auto configuration, set your database connection via the following environment variables. You must specify all of the environment variables for a given database or the database environment variables defaults to SQLITE. ONLY use one database type!
 
 __SQLite__:
 - `SQLITE_DATABASE` Name of the database using sqlite
@@ -118,7 +124,9 @@ __PostgreSQL__:
 - `POSTGRES_PASSWORD` Password for the database user using postgres.
 - `POSTGRES_HOST` Hostname of the database server using postgres.
 
-If you set any values, they will not be asked in the install page on first run. With a complete configuration by using all variables for your database type, you can additionally configure your Nextcloud instance by setting admin user and password (only works if you set both):
+As an alternative to passing sensitive information via environment variables, `_FILE` may be appended to the previously listed environment variables, causing the initialization script to load the values for those variables from files present in the container. See [Docker secrets](#docker-secrets) section below.
+
+If you set any group of values (i.e. all of `MYSQL_DATABASE`, `MYSQL_USER`, `MYSQL_PASSWORD`, `MYSQL_HOST`), they will not be asked in the install page on first run. With a complete configuration by using all variables for your database type, you can additionally configure your Nextcloud instance by setting admin user and password (only works if you set both):
 
 - `NEXTCLOUD_ADMIN_USER` Name of the Nextcloud admin user.
 - `NEXTCLOUD_ADMIN_PASSWORD` Password for the Nextcloud admin user.
@@ -134,6 +142,10 @@ One or more trusted domains can be set through environment variable, too. They w
 The install and update script is only triggered when a default command is used (`apache-foreground` or `php-fpm`). If you use a custom command you have to enable the install / update with
 
 - `NEXTCLOUD_UPDATE` (default: `0`)
+
+You might want to make sure the htaccess is up to date after each container update. Especially on multiple swarm nodes as any discrepancy will make your server unusable.
+
+- `NEXTCLOUD_INIT_HTACCESS` (not set by default) Set it to true to enable run `occ maintenance:update:htaccess` after container initialization.
 
 If you want to use Redis you have to create a separate [Redis](https://hub.docker.com/_/redis/) container in your setup / in your docker-compose file. To inform Nextcloud about the Redis container, pass in the following parameters:
 
@@ -151,7 +163,7 @@ To use an external SMTP server, you have to provide the connection details. To c
 - `SMTP_AUTHTYPE` (default: `LOGIN`): The method used for authentication. Use `PLAIN` if no authentication is required.
 - `SMTP_NAME` (empty by default): The username for the authentication.
 - `SMTP_PASSWORD` (empty by default): The password for the authentication.
-- `MAIL_FROM_ADDRESS` (not set by default): Use this address for the 'from' field in the emails sent by Nextcloud.
+- `MAIL_FROM_ADDRESS` (not set by default): Set the local-part for the 'from' field in the emails sent by Nextcloud.
 - `MAIL_DOMAIN` (not set by default): Set a different domain for the emails than the domain where Nextcloud is installed.
 
 Check the [Nextcloud documentation](https://docs.nextcloud.com/server/latest/admin_manual/configuration_server/email_configuration.html) for other values to configure SMTP.
@@ -165,6 +177,9 @@ To use an external S3 compatible object store as primary storage, set the follow
 - `OBJECTSTORE_S3_SSL` (default: `true`): Whether or not SSL/TLS should be used to communicate with object storage server
 - `OBJECTSTORE_S3_REGION`: The region that the S3 bucket resides in.
 - `OBJECTSTORE_S3_USEPATH_STYLE` (default: `false`): Not required for AWS S3
+- `OBJECTSTORE_S3_LEGACYAUTH` (default: `false`): Not required for AWS S3
+- `OBJECTSTORE_S3_OBJECT_PREFIX` (default: `urn:oid:`): Prefix to prepend to the fileid
+- `OBJECTSTORE_S3_AUTOCREATE` (default: `true`): Create the container if it does not exist
 
 Check the [Nextcloud documentation](https://docs.nextcloud.com/server/latest/admin_manual/configuration_files/primary_storage.html#simple-storage-service-s3) for more information.
 
@@ -177,17 +192,57 @@ To use an external OpenStack Swift object store as primary storage, set the foll
 - `OBJECTSTORE_SWIFT_PROJECT_NAME`: OpenStack project name
 - `OBJECTSTORE_SWIFT_PROJECT_DOMAIN` (default: `Default`): OpenStack project domain
 - `OBJECTSTORE_SWIFT_SERVICE_NAME` (default: `swift`): Swift service name
-- `OBJECTSTORE_SWIFT_SERVICE_REGION`: Swift endpoint region
+- `OBJECTSTORE_SWIFT_REGION`: Swift endpoint region
 - `OBJECTSTORE_SWIFT_CONTAINER_NAME`: Swift container (bucket) that Nextcloud should store the data in
 
 Check the [Nextcloud documentation](https://docs.nextcloud.com/server/latest/admin_manual/configuration_files/primary_storage.html#openstack-swift) for more information.
 
+To customize other PHP limits you can simply change the following variables:
+- `PHP_MEMORY_LIMIT` (default `512M`) This sets the maximum amount of memory in bytes that a script is allowed to allocate. This is meant to help prevent poorly written scripts from eating up all available memory but it can prevent normal operation if set too tight.
+- `PHP_UPLOAD_LIMIT` (default `512M`) This sets the upload limit (`post_max_size` and `upload_max_filesize`) for big files. Note that you may have to change other limits depending on your client, webserver or operating system. Check the [Nextcloud documentation](https://docs.nextcloud.com/server/latest/admin_manual/configuration_files/big_file_upload_configuration.html) for more information.
+
+To customize Apache max file upload limit you can change the following variable:
+- `APACHE_BODY_LIMIT` (default `1073741824` [1GiB]) This restricts the total 
+size of the HTTP request body sent from the client. It specifies the number of _bytes_ that are allowed in a request body. A value of **0** means **unlimited**. Check the [Nextcloud documentation](https://docs.nextcloud.com/server/latest/admin_manual/configuration_files/big_file_upload_configuration.html#apache) for more information.
+
+
+## Auto configuration via hook folders
+
+There are 5 hooks
+
+- `pre-installation` Executed before the Nextcloud is installed/initiated
+- `post-installation` Executed after the Nextcloud is installed/initiated
+- `pre-upgrade` Executed before the Nextcloud is upgraded
+- `post-upgrade` Executed after the Nextcloud is upgraded
+- `before-starting` Executed before the Nextcloud starts
+
+To use the hooks triggered by the `entrypoint` script, either
+- Added your script(s) to the individual of the hook folder(s), which are located at the path `/docker-entrypoint-hooks.d` in the container
+- Use volume(s) if you want to use script from the host system inside the container, see example.
+
+**Note:** Only the script(s) located in a hook folder (not sub-folders), ending with `.sh` and marked as executable, will be executed.
+
+**Example:** Mount using volumes
+```yaml
+...
+  app:
+    image: nextcloud:stable
+
+    volumes:
+      - ./app-hooks/pre-installation:/docker-entrypoint-hooks.d/pre-installation
+      - ./app-hooks/post-installation:/docker-entrypoint-hooks.d/post-installation
+      - ./app-hooks/pre-upgrade:/docker-entrypoint-hooks.d/pre-upgrade
+      - ./app-hooks/post-upgrade:/docker-entrypoint-hooks.d/post-upgrade
+      - ./app-hooks/before-starting:/docker-entrypoint-hooks.d/before-starting
+...
+```
+
 
 ## Using the apache image behind a reverse proxy and auto configure server host and protocol
 
-The apache image will replace the remote addr (ip address visible to Nextcloud) with the ip address from `X-Real-IP` if the request is coming from a proxy in 10.0.0.0/8, 172.16.0.0/12 or 192.168.0.0/16 by default. If you want Nextcloud to pick up the server host (`HTTP_X_FORWARDED_HOST`), protocol (`HTTP_X_FORWARDED_PROTO`) and client ip (`HTTP_X_FORWARDED_FOR`) from a trusted proxy disable rewrite ip and the reverse proxies ip address to `TRUSTED_PROXIES`.
+The apache image will replace the remote addr (IP address visible to Nextcloud) with the IP address from `X-Real-IP` if the request is coming from a proxy in `10.0.0.0/8`, `172.16.0.0/12` or `192.168.0.0/16` by default. If you want Nextcloud to pick up the server host (`HTTP_X_FORWARDED_HOST`), protocol (`HTTP_X_FORWARDED_PROTO`) and client IP (`HTTP_X_FORWARDED_FOR`) from a trusted proxy, then disable rewrite IP and add the reverse proxy's IP address to `TRUSTED_PROXIES`.
 
-- `APACHE_DISABLE_REWRITE_IP` (not set by default): Set to 1 to disable rewrite ip.
+- `APACHE_DISABLE_REWRITE_IP` (not set by default): Set to 1 to disable rewrite IP.
 
 - `TRUSTED_PROXIES` (empty by default): A space-separated list of trusted proxies. CIDR notation is supported for IPv4.
 
@@ -195,6 +250,7 @@ If the `TRUSTED_PROXIES` approach does not work for you, try using fixed values 
 
 - `OVERWRITEHOST` (empty by default): Set the hostname of the proxy. Can also specify a port.
 - `OVERWRITEPROTOCOL` (empty by default): Set the protocol of the proxy, http or https.
+- `OVERWRITECLIURL` (empty by default): Set the cli url of the proxy (e.g. https://mydnsname.example.com)
 - `OVERWRITEWEBROOT` (empty by default): Set the absolute path of the proxy.
 - `OVERWRITECONDADDR` (empty by default): Regex to overwrite the values dependent on the remote address.
 
@@ -221,9 +277,9 @@ volumes:
 
 services:
   db:
-    image: mariadb
+    image: mariadb:10.6
     restart: always
-    command: --transaction-isolation=READ-COMMITTED --binlog-format=ROW
+    command: --transaction-isolation=READ-COMMITTED --log-bin=binlog --binlog-format=ROW
     volumes:
       - db:/var/lib/mysql
     environment:
@@ -267,9 +323,9 @@ volumes:
 
 services:
   db:
-    image: mariadb
+    image: mariadb:10.6
     restart: always
-    command: --transaction-isolation=READ-COMMITTED --binlog-format=ROW
+    command: --transaction-isolation=READ-COMMITTED --log-bin=binlog --binlog-format=ROW
     volumes:
       - db:/var/lib/mysql
     environment:
@@ -355,26 +411,28 @@ volumes:
 
 secrets:
   nextcloud_admin_password:
-    file: ./nextcloud_admin_password.txt # put admin password to this file
+    file: ./nextcloud_admin_password.txt # put admin password in this file
   nextcloud_admin_user:
-    file: ./nextcloud_admin_user.txt # put admin username to this file
+    file: ./nextcloud_admin_user.txt # put admin username in this file
   postgres_db:
-    file: ./postgres_db.txt # put postgresql db name to this file
+    file: ./postgres_db.txt # put postgresql db name in this file
   postgres_password:
-    file: ./postgres_password.txt # put postgresql password to this file
+    file: ./postgres_password.txt # put postgresql password in this file
   postgres_user:
-    file: ./postgres_user.txt # put postgresql username to this file
+    file: ./postgres_user.txt # put postgresql username in this file
 ```
 
-Currently, this is only supported for `NEXTCLOUD_ADMIN_PASSWORD`, `NEXTCLOUD_ADMIN_USER`, `MYSQL_DB`, `MYSQL_PASSWORD`, `MYSQL_USER`, `POSTGRES_DB`, `POSTGRES_PASSWORD`, `POSTGRES_USER` and `REDIS_HOST_PASSWORD`.
+Currently, this is only supported for `NEXTCLOUD_ADMIN_PASSWORD`, `NEXTCLOUD_ADMIN_USER`, `MYSQL_DATABASE`, `MYSQL_PASSWORD`, `MYSQL_USER`, `POSTGRES_DB`, `POSTGRES_PASSWORD`, `POSTGRES_USER`, `REDIS_HOST_PASSWORD`, `SMTP_PASSWORD`, `OBJECTSTORE_S3_KEY`, and `OBJECTSTORE_S3_SECRET`.
+
+If you set any group of values (i.e. all of `MYSQL_DATABASE_FILE`, `MYSQL_USER_FILE`, `MYSQL_PASSWORD_FILE`, `MYSQL_HOST`), the script will not use the corresponding group of environment variables (`MYSQL_DATABASE`, `MYSQL_USER`, `MYSQL_PASSWORD`, `MYSQL_HOST`).
 
 # Make your Nextcloud available from the internet
-Until here, your Nextcloud is just available from you docker host. If you want your Nextcloud available from the internet adding SSL encryption is mandatory.
+Until here, your Nextcloud is just available from your docker host. If you want your Nextcloud available from the internet adding SSL encryption is mandatory.
 
 ## HTTPS - SSL encryption
 There are many different possibilities to introduce encryption depending on your setup.
 
-We recommend using a reverse proxy in front of our Nextcloud installation. Your Nextcloud will only be reachable through the proxy, which encrypts all traffic to the clients. You can mount your manually generated certificates to the proxy or use a fully automated solution which generates and renews the certificates for you.
+We recommend using a reverse proxy in front of your Nextcloud installation. Your Nextcloud will only be reachable through the proxy, which encrypts all traffic to the clients. You can mount your manually generated certificates to the proxy or use a fully automated solution which generates and renews the certificates for you.
 
 In our [examples](https://github.com/nextcloud/docker/tree/master/.examples) section we have an example for a fully automated setup using a reverse proxy, a container for [Let's Encrypt](https://letsencrypt.org/) certificate handling, database and Nextcloud. It uses the popular [nginx-proxy](https://github.com/jwilder/nginx-proxy) and [docker-letsencrypt-nginx-proxy-companion](https://github.com/JrCs/docker-letsencrypt-nginx-proxy-companion) containers. Please check the according documentations before using this setup.
 
@@ -407,7 +465,7 @@ $ docker-compose up -d
 # Adding Features
 A lot of people want to use additional functionality inside their Nextcloud installation. If the image does not include the packages you need, you can easily build your own image on top of it. Start your derived image with the `FROM` statement and add whatever you like.
 
-```yaml
+```dockerfile
 FROM nextcloud:apache
 
 RUN ...
@@ -431,7 +489,7 @@ If you use your own Dockerfile, you need to configure your docker-compose file a
 
 If you intend to use another command to run the image, make sure that you set `NEXTCLOUD_UPDATE=1` in your Dockerfile. Otherwise the installation and update will not work.
 
-```yaml
+```dockerfile
 FROM nextcloud:apache
 
 ...
@@ -462,73 +520,75 @@ You're already using Nextcloud and want to switch to docker? Great! Here are som
 
 1. Define your whole Nextcloud infrastructure in a `docker-compose` file and run it with `docker-compose up -d` to get the base installation, volumes and database. Work from there.
 2. Restore your database from a mysqldump (nextcloud\_db\_1 is the name of your db container)
-  - To import from a MySQL dump use the following commands
+    - To import from a MySQL dump use the following commands
     ```console
     docker cp ./database.dmp nextcloud_db_1:/dmp
-    docker-compose exec db sh -c "mysql -u USER -pPASSWORD nextcloud < /dmp"
+    docker-compose exec db sh -c "mysql --user USER --password PASSWORD nextcloud < /dmp"
     docker-compose exec db rm /dmp
     ```
-  - To import from a PostgreSQL dump use to following commands
+    - To import from a PostgreSQL dump use to following commands
     ```console
     docker cp ./database.dmp nextcloud_db_1:/dmp
     docker-compose exec db sh -c "psql -U USER --set ON_ERROR_STOP=on nextcloud < /dmp"
     docker-compose exec db rm /dmp
     ```
 3. Edit your config.php
-  1. Set database connection
-     - In case of MySQL database
-      ```php
-      'dbhost' => 'db:3306',
-      ```
-     - In case of PostgreSQL database
-      ```php
-      'dbhost' => 'db:5432',
-      ```
-  2. Make sure you have no configuration for the `apps_paths`. Delete lines like these
-  ```diff
-  - 'apps_paths' => array (
-  -     0 => array (
-  -         'path' => OC::$SERVERROOT.'/apps',
-  -         'url' => '/apps',
-  -         'writable' => true,
-  -     ),
-  - ),
-  ```
-  3. Make sure to have the `apps` directory non writable and the `custom_apps` directory writable
-  ```php
-  'apps_paths' => array (
-    0 => array (
-      'path' => '/var/www/html/apps',
-      'url' => '/apps',
-      'writable' => false,
-    ),
-    1 => array (
-      'path' => '/var/www/html/custom_apps',
-      'url' => '/custom_apps',
-      'writable' => true,
-    ),
-  ),
-  ```
-  4. Make sure your data directory is set to /var/www/html/data
-  ```php
-  'datadirectory' => '/var/www/html/data',
-  ```
-
-
+    1. Set database connection
+        - In case of MySQL database
+        ```php
+        'dbhost' => 'db:3306',
+        ```
+        - In case of PostgreSQL database
+        ```php
+        'dbhost' => 'db:5432',
+        ```
+    2. Make sure you have no configuration for the `apps_paths`. Delete lines like these
+        ```php
+        'apps_paths' => array (
+            0 => array (
+                'path' => OC::$SERVERROOT.'/apps',
+                'url' => '/apps',
+                'writable' => true,
+            ),
+        ),
+        ```
+    3. Make sure to have the `apps` directory non writable and the `custom_apps` directory writable
+        ```php
+        'apps_paths' => array (
+          0 => array (
+            'path' => '/var/www/html/apps',
+            'url' => '/apps',
+            'writable' => false,
+          ),
+          1 => array (
+            'path' => '/var/www/html/custom_apps',
+            'url' => '/custom_apps',
+            'writable' => true,
+          ),
+        ),
+        ```
+    4. Make sure your data directory is set to /var/www/html/data
+        ```php
+        'datadirectory' => '/var/www/html/data',
+        ```
 4. Copy your data (nextcloud_app_1 is the name of your Nextcloud container):
-```console
-docker cp ./data/ nextcloud_app_1:/var/www/html/
-docker-compose exec app chown -R www-data:www-data /var/www/html/data
-docker cp ./theming/ nextcloud_app_1:/var/www/html/
-docker-compose exec app chown -R www-data:www-data /var/www/html/theming
-docker cp ./config/config.php nextcloud_app_1:/var/www/html/config
-docker-compose exec app chown -R www-data:www-data /var/www/html/config
-```
+    ```console
+    docker cp ./data/ nextcloud_app_1:/var/www/html/
+    docker-compose exec app chown -R www-data:www-data /var/www/html/data
+    docker cp ./theming/ nextcloud_app_1:/var/www/html/
+    docker-compose exec app chown -R www-data:www-data /var/www/html/theming
+    docker cp ./config/config.php nextcloud_app_1:/var/www/html/config
+    docker-compose exec app chown -R www-data:www-data /var/www/html/config
+    ```
+    If you want to preserve the metadata of your files like timestamps, copy the data directly on the host to the named volume using plain `cp` like this:
+    ```console
+    cp --preserve --recursive ./data/ /path/to/nextcloudVolume/data
+    ```
 5. Copy only the custom apps you use (or simply redownload them from the web interface):
-```console
-docker cp ./custom_apps/ nextcloud_data:/var/www/html/
-docker-compose exec app chown -R www-data:www-data /var/www/html/custom_apps
-```
+    ```console
+    docker cp ./custom_apps/ nextcloud_data:/var/www/html/
+    docker-compose exec app chown -R www-data:www-data /var/www/html/custom_apps
+    ```
 
 # Questions / Issues
 If you got any questions or problems using the image, please visit our [Github Repository](https://github.com/nextcloud/docker) and write an issue.

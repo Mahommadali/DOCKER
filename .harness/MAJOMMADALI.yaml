@@ -1,0 +1,14 @@
+inputSet:
+  pipeline:
+    identifier: Build_Mahommadali_DOCKER_1700843159473
+    properties:
+      ci:
+        codebase:
+          build:
+            type: branch
+            spec:
+              branch: <+trigger.branch>
+  name: MAJOMMADALI
+  identifier: MAJOMMADALI
+  orgIdentifier: default
+  projectIdentifier: D
