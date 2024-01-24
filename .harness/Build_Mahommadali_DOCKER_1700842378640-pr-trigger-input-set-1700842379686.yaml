@@ -1,0 +1,14 @@
+inputSet:
+  name: Build_Mahommadali_DOCKER_1700842378640-pr-trigger-input-set
+  identifier: Build_Mahommadali_DOCKER_1700842378640prtriggerinputset
+  orgIdentifier: default
+  projectIdentifier: DOCKER
+  pipeline:
+    identifier: Build_Mahommadali_DOCKER_1700842378640
+    properties:
+      ci:
+        codebase:
+          build:
+            type: PR
+            spec:
+              number: <+trigger.prNumber>

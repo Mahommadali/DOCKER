@@ -1,0 +1,14 @@
+inputSet:
+  name: Build_Mahommadali_DOCKER_1700842196149-push-trigger-input-set
+  identifier: Build_Mahommadali_DOCKER_1700842196149pushtriggerinputset
+  orgIdentifier: default
+  projectIdentifier: default_project
+  pipeline:
+    identifier: Build_Mahommadali_DOCKER_1700842196149
+    properties:
+      ci:
+        codebase:
+          build:
+            type: branch
+            spec:
+              branch: <+trigger.branch>

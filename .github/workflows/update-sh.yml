@@ -6,13 +6,14 @@ on:
     - master
   schedule:
   - cron:  '15 0 * * *'
+  workflow_dispatch:
 
 jobs:
   run_update_sh:
     name: Run update.sh script
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
     - name: Run update.sh script
       run: ./update.sh
     - name: Commit files
